@@ -1,0 +1,199 @@
+---
+title: "Human Activity Recognition"
+author: "Shreya Shukla"
+output:
+  html_document: default
+  word_document: default
+---
+<style>
+body{
+  font-family: Lucida Bright;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, cache = TRUE)
+```
+
+## Problem Statement
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. 
+
+If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+## Loading required libraries
+```{r warning=FALSE}
+library(dplyr)
+library(caret)
+library(ggplot2)
+library(tidyr)
+```
+
+## Loading Data
+```{r warning=FALSE}
+train<-read.csv("./pml-training.csv")
+test<-read.csv("./pml-testing.csv")
+dim(train)
+dim(test)
+```
+```{r}
+colnames(train)
+```
+
+## Separating the categorical and numerical variables
+I decided to separate the categorical and numerical features and explore them separately.
+```{r}
+numeric_data<-train[,!sapply(train,is.factor)]
+cat_data<-train[,sapply(train,is.factor)]
+dim(numeric_data)
+##colnames(numeric_data)
+dim(cat_data)
+##colnames(cat_data)
+##str(cat_data)
+```
+
+
+## Finding the missing values in the numerical data
+```{r fig.width=10,fig.height=11}
+##Removing the identifier columns from the numerical data
+numeric_data<-select(numeric_data,-(1:4))
+
+##Finding the missing values percentage
+miss<-sapply(numeric_data, function(x) mean(is.na(x)))
+head(miss)
+miss<-miss[miss>0]
+miss<-as.data.frame(miss)
+Features<-rownames(miss)
+miss<-mutate(miss, Features = Features)
+theme_set(
+theme_bw() +
+theme(legend.position = "none")
+)
+g<-ggplot(miss, aes(x = Features, y= miss, fill = Features))+geom_bar(stat= "identity")+ coord_flip()+labs(y = "Percentage of missing values")
+g
+
+```
+
+## Removing all the columns with very large proportion of NA values
+```{r}
+##Total no of columns to remove
+length(Features)
+numeric_data<-select(numeric_data,-c(Features))
+dim(numeric_data)
+##colnames(numeric_data)
+```
+
+## Exploratory data analysis for the numerical data
+```{r include = FALSE}
+##Plot all the variables of the numerical data columns to check for skewness
+theme_set(
+theme_bw() +
+theme(legend.position = "none", axis.text.x = element_text(angle = 45))
+)
+numeric_data%>%gather() %>% ggplot(aes(value))+facet_wrap(~key,scales = "free")+geom_histogram()
+```
+
+## Finding the correlation between different variables in the numerical data columns
+```{r}
+##Finding correlation between different features
+M<-abs(cor(numeric_data[,-52]))
+diag(M)<-0
+which(M > 0.8,arr.ind=T)
+```
+Since we can see the features with the similar names and different axis are highly correlated we can use PCA for optimizing the no of features required to build a model. However, for this assignment if the accuracy of our model is good enough, we may skip it.
+
+## Exploring the categorical data
+```{r}
+str(cat_data)
+```
+
+We can observe 2 major things for the categorical data:
+
+1. Some variables have 2-4 factors which have value of either 0, '' or value 'DIV/#'
+
+2. We can see that all the variables are numerical except cvtd_timestamp,new_window, user_name, classe. 
+We first label encode new_window, user_name and classe, then we convert all the numerical factor variables as numericals. This will introduce NA in place of empty and 'DIV/#' values.
+
+```{r warning=FALSE}
+##Converting numerical factor variable as numerical variable
+cat_data<-cat_data[,-(1:3)]
+##colnames(cat_data)
+cat_data<-sapply(select(cat_data,-c('classe')),function(x) x<-as.numeric(levels(x)[x]))
+cat_data<-as.data.frame(cat_data)
+cat_data<-mutate(cat_data,classe = train$classe)
+```
+
+##Finding columns with missing values in categorical data
+```{r}
+miss<-sapply(cat_data[,-34], function(x) mean(is.na(x)))
+head(miss)
+miss<-miss[miss>0]
+miss<-as.data.frame(miss)
+Features = rownames(miss)
+theme_set(
+theme_bw() +
+theme(legend.position = "none")
+)
+ggplot(miss, aes(x = Features, y= miss, fill = Features))+geom_bar(stat= "identity")+ coord_flip()+labs(y = "Percentage of missing values")
+```
+
+## Removing the columns with more than 98% of NA values
+```{r}
+cat_data<-select(cat_data,-c(Features))
+dim(cat_data)
+str(cat_data)
+```
+
+## Creating new dataset with the left numerical and categorical variables that we will use for model building
+```{r}
+numeric_data<-cbind(numeric_data,classe = cat_data[,c('classe')])
+
+##Creating test and train datasets for model building and evaluation
+inTrain <- createDataPartition(y=numeric_data$classe,p=0.7, list=FALSE)
+trainDS<-numeric_data[inTrain,]
+testDS<-numeric_data[-inTrain,]
+dim(trainDS)
+dim(testDS)
+
+```
+
+## Model building 
+In this we build two models using Random Forest and GBM which is a boosting algorithm and helps in combining predictors. Then we finally use the most accurate model
+
+a) Using Random Forest
+```{r cache=TRUE}
+##creating Random forest model and checking it accuracy
+set.seed(12345)
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modFitRandForest <- train(classe ~ ., data=trainDS, method="rf",trControl=controlRF)
+modFitRandForest$finalModel
+predictrf<-predict(modFitRandForest, newdata=testDS)
+confrf<-confusionMatrix(predictrf, testDS$classe)
+confrf
+```
+
+b) Using gbm
+```{r cache=TRUE}
+##Creating gbm model and checking its accuracy
+ctrlGBM <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+modGBM<-train(classe~.,data = trainDS,method = "gbm",trControl = ctrlGBM,verbose = FALSE)
+modGBM$finalModel
+predictGBM<-predict(modGBM,testDS)
+confGBM<-confusionMatrix(predictGBM,testDS$classe)
+confGBM
+```
+
+We observe that the accuracy of Random forest for the given problem is more than GBM. Therefore we will use it for making predictions in the quiz.
+
+
