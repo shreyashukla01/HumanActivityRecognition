@@ -21,3 +21,6 @@ To run the code, perform following steps:
 1. Download the training and testing files.
 2. Load in R using the code in the RMD file for loading data into the workspace
 3. Execute the R code in the Rmd file.
+
+
+You can also download the HTML file to see the full data analysis.
