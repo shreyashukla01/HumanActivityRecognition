@@ -15,3 +15,9 @@ https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
 The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. 
 
 If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+
+To run the code, perform following steps:
+1. Download the training and testing files.
+2. Load in R using the code in the RMD file for loading data into the workspace
+3. Execute the R code in the Rmd file.
